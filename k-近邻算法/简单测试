@@ -1,0 +1,107 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
+import time 
+plt.rcParams['font.sans-serif']=['SimHei'] #图中文字体设置为黑体
+
+class k_neighbors():
+    '''k近邻算法类'''
+    def __init__(self,k=3):
+        # k为取近邻的点数
+        self.k = k
+        
+    def k_neigh(self,trainFeatures,labels,testFeatures):
+        # 计算欧氏距离的k近邻算法，trainFeatures为输入特征向量，label为对应的标签
+        dataSize = trainFeatures.shape[0]     
+        # 保存每个测试点的类别
+        testLabels = []       
+        
+        # 取出每个测试点进行距离的计算
+        for i in range(testFeatures.shape[0]):
+            # 计算训练数据与测试数据间的误差
+            differ = testFeatures[i,:] - trainFeatures
+            sqrDiff = differ ** 2
+            distance = np.sqrt(np.sum(sqrDiff,axis=1))
+            # 排序，返回的是索引值
+            sortDistanceIdx = np.argsort(distance)  
+            # 记录每个类别出现的次数
+            resultCounts = {}
+            if self.k > dataSize:
+                print('k值设置过大，请减小!')
+                return 0
+            else:
+                for i in range(self.k):
+                    # 取出前k个近邻对应的标签
+                    label = labels[sortDistanceIdx[i]]
+                    # 为所有可能的分类创建字典
+                    if label not in resultCounts.keys():    
+                        resultCounts[label] = 0
+                    resultCounts[label] += 1
+            
+            # 之后在resultCounts结果中找到最多标签的那个类别
+            sortResult = sorted(resultCounts.items(),key=lambda a:a[1],reverse=True) 
+            testLabels.append(sortResult[0][0])
+            
+        return testLabels,distance[sortDistanceIdx[self.k-1]]
+    
+    def kd_tree(self,points, depth):
+        # 根据训练数据创建kd树
+        if 0 == len(points):
+            return None
+        cutting_dim = depth % len(points[0])
+        medium_index = len(points) // 2
+        points.sort(key=itemgetter(cutting_dim))
+        node = Node(points[medium_index])
+        node.left = kd_tree(points[:medium_index], depth + 1)
+        node.right = kd_tree(points[medium_index + 1:], depth + 1)
+        return node
+        
+def GetData(dataMat):
+    '''得到规定的数据格式'''
+    X = []
+    Y = []
+    for i in range(len(dataMat)):
+        X.append(dataMat[i][0])
+        Y.append(dataMat[i][1])
+    X = np.array(X)
+    Y = np.array(Y)
+    return X,Y
+
+trainData = [((3,3),1),((4,3),1),((1,1),-1),((3,2.5),1),((2,3),1),((1.5,2),-1),((2,2),-1),\
+         ((1.6,1.75),-1),(((3.5,2.5),1)),((3,1.5),-1),((4,2),1)]
+trainFeatures,trainLabels = GetData(trainData)
+testFeatures = np.random.uniform(0,4,size=(10000,2))   #随机产生测试数据
+model = k_neighbors(k=3)
+start_time = time.time()
+testLabels, furthDistance = model.k_neigh(trainFeatures,trainLabels,testFeatures)
+end_time = time.time()
+print('用时:',str(end_time-start_time))
+
+# 画图
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.scatter(trainFeatures[:,0], trainFeatures[:,1], c=trainLabels, s=60, cmap=plt.cm.Set1, marker='o')
+ax.scatter(testFeatures[:,0], testFeatures[:,1], c='green', s=500, cmap=plt.cm.Set1, marker='*')
+# ax.arrow(testFeatures[0,0], testFeatures[0,1], 0.0, 0.35, width=0.01)
+# ax.scatter(testFeatures[:,0], testFeatures[:,1], c=testLabels, s=200, cmap=plt.cm.Set1, marker='1')
+# 画包围近邻点的圆
+# cir = Circle((testFeatures[:,0], testFeatures[:,1]), radius=furthDistance,fill=False)
+# ax.add_patch(cir)
+    
+for i in range(10):
+    model = k_neighbors(k=i+1)
+    start_time = time.time()
+    testLabels, furthDistance = model.k_neigh(trainFeatures,trainLabels,testFeatures)
+    # 画图
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.scatter(trainFeatures[:,0], trainFeatures[:,1], c=trainLabels, s=60, cmap=plt.cm.Set1, marker='o')
+    ax.scatter(testFeatures[:,0], testFeatures[:,1], c=testLabels, s=200, cmap=plt.cm.Set1, marker='1')
+#     cir = Circle((testFeatures[:,0], testFeatures[:,1]), radius=furthDistance,fill=False)
+#     ax.add_patch(cir)
+#     fig.savefig('./data/K-近邻' + "/" + str(i+1) + ".png")
+
+    
+    # ax.arrow(testFeatures[:,0]+0.3, testFeatures[:,1]+0.4, -0.25, -0.3, width=0.01)
+    # ax.text(testFeatures[:,0]+0.5, testFeatures[:,1]+0.5, s='测试点', fontsize=20,\
+    #         color = "r", style = "italic", weight = "light",verticalalignment='center', horizontalalignment='right',rotation=0)
