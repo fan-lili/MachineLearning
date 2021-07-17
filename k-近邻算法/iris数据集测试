@@ -1,0 +1,60 @@
+'''Iris数据集验证k近邻算法的有效性'''
+from sklearn.datasets import load_iris
+
+# 导入鸢尾花数据集
+iris = load_iris()   
+# 查看数据集大小
+print(iris.data.shape)
+# 查看数据集说明，输入4个特征：花萼长度，宽度，花瓣长度，花瓣宽度；来预测该花属于（Setosa，Versicolour，Virginica）中的哪一类
+print(iris.DESCR)
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+    
+# 记录每次在测试集上的分类精度
+score = []
+result = []
+k_num = 10
+for i in range(k_num):
+    for _ in range(1000):
+        # 随机拆分训练集和测试集
+        trainData,testData,trainLabels,testLabels = train_test_split(iris.data,iris.target,test_size=0.2)
+        # 将特征向量归一化
+        std = StandardScaler() 
+        stdTrainData = std.fit_transform(trainData)
+        stdTestData = std.fit_transform(testData)
+        # 模型建立
+        model = k_neighbors(k=i+1)
+        testPredictLabels, furthDistance = model.k_neigh(stdTrainData,trainLabels,stdTestData)
+        # 记录结果
+        score.append(np.sum(testPredictLabels==testLabels)/len(testLabels))
+    result.append(np.mean(score))
+
+# 画图
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.set_xlabel('k')
+ax.set_ylabel('test accuracy')
+ax.plot(np.linspace(1,k_num,k_num),result,marker='*')
+ax.set_xticks(np.linspace(1,k_num,k_num))
+
+
+'''------------------------------------------------------------------'''
+'''在这里直接使用了sklearn库中的相关类和函数'''
+from sklearn.neighbors import KNeighborsClassifier
+
+knn = KNeighborsClassifier(n_neighbors=2)
+# 记录每次在测试集上的分类精度
+score = []
+for _ in range(1000):
+    # 随机拆分训练集和测试集
+    trainData,testData,trainLabels,testLabels = train_test_split(iris.data,iris.target,test_size=0.2)
+    # 将特征向量归一化
+    std = StandardScaler() 
+    stdTrainData = std.fit_transform(trainData)
+    stdTestData = std.fit_transform(testData)
+    # 模型建立
+    knn.fit(stdTrainData,trainLabels)
+    testPredictLabels = knn.predict(stdTestData)
+    score.append(np.sum(testPredictLabels==testLabels)/len(testLabels))
+print('测试集上分类精度为:',np.mean(score))
