@@ -1,0 +1,156 @@
+from numpy import *
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
+
+def loadDataSet(filename):
+    '''导入数据集'''
+    dataMat = []
+    labelMat = []
+    fr = open(filename)
+    for line in fr.readlines():
+        lineArr = line.strip().split('\t')
+        dataMat.append([float(lineArr[0]), float(lineArr[1])])
+        labelMat.append(float(lineArr[2]))
+    return dataMat,labelMat
+
+def selectJrand(i,m):
+    '''从m中选择一个不是i的元素'''
+    j = i
+    while(j==i):
+        j = int(random.uniform(0,m))
+    return j
+
+def clipAlpha(aj,H,L):
+    '''调整alpha在[L,H]之间'''
+    if aj > H:
+        aj = H
+    if aj < L:
+        aj = L
+    return aj
+
+'''
+简化版SMO伪代码如下：
+创建一个alpha向量,并将其初始化为0向量
+当迭代次数小于最大迭代次数时（外循环）
+    对数据集中的每个数据向量（内循环）：
+        如果该数据向量能被优化：
+            随机选择另外一个数据向量
+            同时优化这两个向量
+            如果两个向量都不能被优化，则退出内循环
+    如果所有向量都没被优化，增加迭代数目，继续下一次循环
+'''
+def SMO_Simple(dataMatIn, classLabels, C, toler, maxIter):
+    '''
+    简化版SMO算法
+        C：     松弛变量
+        toler   容错率
+        maxIter 最大循环次数
+    返回：
+        b       模型的常值
+        alphas  拉格朗日乘子
+    '''
+    dataMatrix = mat(dataMatIn)
+    labelMat = mat(classLabels).transpose()
+    b = 0
+    m,n = shape(dataMatrix)
+    # 构建一个alpha列矩阵
+    alphas = mat(zeros((m,1)))
+    iter = 0
+    while(iter < maxIter):
+        alphaPairsChanged = 0
+        # 遍历m个数据样本
+        for i in range(m):
+            # 计算第i个样本预测的类别
+            fXi = float(multiply(alphas,labelMat).T * (dataMatrix*dataMatrix[i,:].T)) + b
+            # 计算预测类别与真实类别之差
+            Ei = fXi - float(labelMat[i])
+            # 如果误差很大且对满足条件的alpha值进行优化
+            if ((labelMat[i]*Ei < -toler) and (alphas[i] < C)) or ((labelMat[i]*Ei > toler) and (alphas[i] > 0)):
+                
+                # 任意选取第二个alpha值j
+                j = selectJrand(i,m)
+                # 计算第j个样本预测的类别
+                fXj = float(multiply(alphas,labelMat).T * (dataMatrix*dataMatrix[j,:].T)) + b
+                # 计算预测类别与真实类别之差
+                Ej = fXj - float(labelMat[j])
+                
+                # 保存alphai和alphaj，进行后续的比较
+                alphaIold = alphas[i].copy()
+                alphaJold = alphas[j].copy()
+                
+                # 确定待优化alpha值的上下限
+                if (labelMat[i] != labelMat[j]):
+                    L = max(0, alphas[j] - alphas[i])
+                    H = min(C, C + alphas[j] - alphas[i])
+                else:
+                    L = max(0, alphas[j] + alphas[i] - C)
+                    H = min(C, alphas[j] + alphas[i])
+                # 若上下限相等，不做调整
+                if L == H:
+                    print('L==H')
+                    continue
+                    
+                # 计算eta，从而更新alpha值
+                eta = 2.0 * dataMatrix[i,:] * dataMatrix[j,:].T - dataMatrix[i,:] * dataMatrix[i,:].T - dataMatrix[j,:] * dataMatrix[j,:].T
+                if eta >= 0:
+                    print('eta>=0')
+                    continue
+                    
+                # 更新alpha值
+                alphas[j] -= labelMat[j]*(Ei - Ej)/eta
+                alphas[j] = clipAlpha(alphas[j], H, L)
+                
+                # 若更新量很小
+                if (abs(alphas[j] - alphaJold) < 0.00001):
+                    print('j not moving enough')
+                    continue
+                    
+                # 根据约束更新alphaI值
+                alphas[i] += labelMat[j]*labelMat[i]*(alphaJold - alphas[j])
+                
+                # 计算模型的b值
+                b1 = b - Ei - labelMat[i]*(alphas[i] - alphaIold)*dataMatrix[i,:]*dataMatrix[i,:].T \
+                            - labelMat[j]*(alphas[j] - alphaJold)*dataMatrix[i,:]*dataMatrix[j,:].T
+                b2 = b - Ej - labelMat[i]*(alphas[i] - alphaIold)*dataMatrix[i,:]*dataMatrix[j,:].T \
+                            - labelMat[j]*(alphas[j] - alphaJold)*dataMatrix[j,:]*dataMatrix[j,:].T
+                if (0 < alphas[i]) and (C > alphas[i]):
+                    b = b1
+                elif (0 < alphas[j]) and (C > alphas[j]):
+                    b = b2
+                else:
+                    b = (b1 + b2)/2.0
+                    
+                alphaPairsChanged += 1
+                print('iter: {} i: {},pairs changed {}'.format(iter, i, alphaPairsChanged))
+        if (alphaPairsChanged == 0):
+            iter += 1
+        else:
+            iter = 0
+        print('iteration number:',iter)
+    return b,alphas
+
+dataMat,labelMat = loadDataSet('./SVM_testSet.txt')
+b,alphas = SMO_Simple(dataMat, labelMat, 0.6, 0.001, 50)
+
+# 只有对应的0<alpha，该点才是支持向量
+SupportIdx = where(alphas>0)[0]
+
+dataMat = array(dataMat)
+labelMat = array(labelMat)
+
+w = zeros((1,2))
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.scatter(dataMat[:,0], dataMat[:,1], c=labelMat, s=30)
+
+for i in range(len(SupportIdx)):
+    Idx = SupportIdx[i]
+    w += alphas[Idx]*labelMat[Idx]*dataMat[Idx]
+    cir = Circle((dataMat[Idx,0],dataMat[Idx,1]), radius=0.3, fill=False, color='red')
+    ax.add_patch(cir)
+    
+xx = linspace(min(dataMat[:,0])-0.5,max(dataMat[:,0])+1,50)
+yy = -(w[0][0]*xx + b)/w[0][1]
+ax.set_xlim(min(xx[:]),max(xx[:]))
+ax.set_ylim(-6,5)
+ax.plot(xx[:,newaxis],yy.T)
