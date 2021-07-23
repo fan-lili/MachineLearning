@@ -1,0 +1,226 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from math import log
+import operator
+import pickle
+
+class DecisionTree():
+    '''决策树类'''
+    def __init__(self):
+        pass
+    
+    def calcShannonEnt(self,dataSet):
+        '''计算香农熵'''
+        # 数据个数
+        numEntries = len(dataSet) 
+        labelCounts = {}
+        # 先计算每个分类结果的个数
+        for featVec in dataSet:
+            currentLabel = featVec[-1]
+            if currentLabel not in labelCounts.keys():
+                # 为所有可能的分类创建字典
+                labelCounts[currentLabel] = 0
+            labelCounts[currentLabel] += 1
+        shannonEnt = 0.0
+        # 再计算香农熵
+        for key in labelCounts:
+            prob = float(labelCounts[key])/numEntries
+            shannonEnt -= prob * log(prob,2)
+        return shannonEnt
+    
+    def splitDataSet(self,dataSet,axis,value):
+        '''
+        根据给定的特征划分数据集，得到去除特定特征的特定值的数据集
+            axis:选取的特征
+            value:选取特征的取值
+        '''
+        retDataSet = []
+        for featVec in dataSet:
+            # 若第featVec个数据的第axis个特征取值为value
+            if featVec[axis] == value:
+                # 记录除掉axis列的其他数值
+                reducedFeatVec = featVec[:axis]
+                reducedFeatVec.extend(featVec[axis+1:])
+                retDataSet.append(reducedFeatVec)
+        return retDataSet
+    
+    def chooseBestFeatureToSplit(self,dataSet):
+        '''根据信息增益选择最好的数据划分方式，返回最好的特征'''
+        numFeatures = len(dataSet[0]) - 1
+        baseEntropy = self.calcShannonEnt(dataSet)
+        bestInfoGain = 0.0
+        bestFeature = -1
+        # 计算每个特征的信息增益，并进行比较
+        for i in range(numFeatures):
+            # 只包含第i个特征的list
+            featList = [example[i] for example in dataSet]
+            # 将其转化为集合，保证元素不相同
+            uniqueVals = set(featList)
+            newEntropy = 0.0
+            for value in uniqueVals:
+                # 根据特征划分数据集
+                subDataSet = self.splitDataSet(dataSet,i,value)
+                # 计算子数据集的香农熵
+                prob = len(subDataSet)/float(len(dataSet))
+                newEntropy += prob * self.calcShannonEnt(subDataSet)
+            # 计算信息增益
+            infoGain = baseEntropy - newEntropy
+            # 比较信息增益
+            if(infoGain > bestInfoGain):
+                bestFeature = i
+                bestInfoGain = infoGain
+        return bestFeature
+    
+    def majorityCnt(self,classList):
+        '''当已经处理完所有属性，但类标签仍不唯一时，采用多数表决制'''
+        classCount = {}
+        for vote in classList:
+            if vote not in classCount.keys():
+                classCount[vote] = 0
+            classCount[vote] += 1
+        sortedClassCount = sorted(classCount.iteritems(),key=operator.itemgetter(1),reverse=True)
+        return sortedClassCount[0][0]
+    
+    def creatTree(self,dataSet,labels):
+        '''递归创建决策树'''
+        classList = [example[-1] for example in dataSet]
+        # 若类别完全相同，则停止划分，返回对应的类别
+        if classList.count(classList[0]) == len(classList):
+            return classList[0]
+        # 若分到最后，仍存在多个类别
+        if len(dataSet[0]) == 1:
+            return self.majorityCnt(classList)
+        # 选择最佳的特征进行划分
+        bestFeat = self.chooseBestFeatureToSplit(dataSet)
+        bestFeatLabel = labels[bestFeat]
+        Tree = {bestFeatLabel:{}}
+        # 删除对应的特征
+        del(label[bestFeat])
+        # 根据特征划分得到子数据集
+        featList = [example[bestFeat] for example in dataSet]
+        uniqueVals = set(featList)
+        for value in uniqueVals:
+            subLabels = labels[:]
+            Tree[bestFeatLabel][value] = self.creatTree(self.splitDataSet(dataSet,bestFeat,value),subLabels)
+        return Tree
+    
+    def classify(self,Tree,featLabels,testVec):
+        '''使用构造好的决策树执行分类'''
+        firstStr = list(Tree.keys())[0]
+        secondDict = Tree[firstStr]
+        featIndex = featLabels.index(firstStr)
+        for key in secondDict.keys():
+            # 如果特征值匹配
+            if testVec[featIndex] == key:
+                # 如果还要进入下一级，则递归
+                if isinstance(secondDict[key],dict):
+                    classLabel = self.classify(secondDict[key],featLabels,testVec)
+                else:
+                    classLabel = secondDict[key]
+        return classLabel
+        
+def getNumLeafs(myTree):
+    '''获取叶节点的数目'''
+    numLeafs = 0
+    firstStr = list(myTree.keys())[0]
+    secondDict = myTree[firstStr]
+    for key in secondDict.keys():
+        # 如果key_value的value为字典，说明还要继续往下分
+        if isinstance(secondDict[key],dict):   
+            numLeafs += getNumLeafs(secondDict[key])
+        else:
+            numLeafs += 1
+    return numLeafs
+
+def getTreeDepth(myTree):
+    '''获取树的层数'''
+    maxDepth = 0
+    firstStr = list(myTree.keys())[0]
+    secondDict = myTree[firstStr]
+    for key in secondDict.keys():
+        if isinstance(secondDict[key],dict):
+            thisDepth = 1 + getTreeDepth(secondDict[key])
+        else:
+            thisDepth = 1
+        if thisDepth > maxDepth:
+            maxDepth = thisDepth
+    return maxDepth
+
+def plotNode(nodeTxt,centerPt,parentPt,nodeType):
+    '''绘制带箭头的注释'''
+    creatPlot.ax1.annotate(nodeTxt,xy=parentPt,xycoords='axes fraction',xytext=centerPt,textcoords='axes fraction',\
+                           va='center',ha='center',bbox=nodeType,arrowprops=arrow_args)
+
+def plotMidText(cntrPt,parentPt,txtString):
+    '''在父子节点间填充文本信息'''
+    xMid = (parentPt[0]-cntrPt[0])/2 + cntrPt[0]
+    yMid = (parentPt[1]-cntrPt[1])/2 + cntrPt[1]
+    creatPlot.ax1.text(xMid,yMid,txtString)
+
+def plotTree(myTree,parentPt,nodeTxt):
+    '''画树'''
+    numLeafs = getNumLeafs(myTree)
+    depth = getTreeDepth(myTree)
+    firstStr = list(myTree.keys())[0]
+    cntrPt = (plotTree.xOff + (1.0 + float(numLeafs))/2.0/plotTree.totalW,plotTree.yOff)
+    plotMidText(cntrPt,parentPt,nodeTxt)
+    plotNode(firstStr,cntrPt,parentPt,decisionNode)
+    secondDict = myTree[firstStr]
+    plotTree.yOff = plotTree.yOff - 1.0/plotTree.totalD
+    for key in secondDict.keys():
+        if isinstance(secondDict[key],dict):
+            plotTree(secondDict[key],cntrPt,str(key))
+        else:
+            plotTree.xOff = plotTree.xOff + 1.0/plotTree.totalW
+            plotNode(secondDict[key],(plotTree.xOff,plotTree.yOff),cntrPt,leafNode)
+            plotMidText((plotTree.xOff,plotTree.yOff),cntrPt,str(key))
+    plotTree.yOff = plotTree.yOff + 1.0/plotTree.totalD
+
+def creatPlot(inTree):
+    fig = plt.figure(1,facecolor='white')
+    fig.clf()
+    axprops = dict(xticks=[],yticks=[])
+    creatPlot.ax1 = plt.subplot(111,frameon=False,**axprops)
+    plotTree.totalW = float(getNumLeafs(inTree)) 
+    plotTree.totalD = float(getTreeDepth(inTree))
+    plotTree.xOff = -0.5/plotTree.totalW
+    plotTree.yOff = 1.0
+    plotTree(inTree,(0.5,1.0),'')
+    plt.show()
+
+def storeTree(inputTree,filename):
+    '''保存决策树'''
+    fw = open(filename,'wb')
+    pickle.dump(inputTree,fw)
+    fw.close()
+
+def grabTree(filename):
+    '''拿出训练好的决策树'''
+    fr = open(filename,'rb')
+    return pickle.load(fr)
+
+def creatDataSet():
+    '''创建数据集'''
+    dataSet = [[1,1,'yes'],
+               [1,1,'yes'],
+               [1,0,'no'],
+               [0,1,'no'],
+               [0,0,'no']]
+    label = ['no surfacing','flippers']
+    return dataSet,label
+
+if __name__ == '__main__':
+    decisionNode = dict(boxstyle='sawtooth',fc='0.8')
+    leafNode = dict(boxstyle='round4',fc='0.8')
+    arrow_args = dict(arrowstyle='<-')
+    dataSet,label = creatDataSet()
+    myTree = DecisionTree()
+    TreeDecision = myTree.creatTree(dataSet,label)
+    print(TreeDecision)
+    storeTree(TreeDecision,'classifierStorage.txt')
+    Tree = grabTree('classifierStorage.txt')
+    creatPlot(Tree)
+    # 测试
+    label = ['no surfacing','flippers']
+    result = myTree.classify(TreeDecision,label,[1,0])
+    print('测试结果为:',result)
