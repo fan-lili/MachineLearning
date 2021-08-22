@@ -266,3 +266,8 @@ for i in range(shape(testDataRandom)[0]):
     kernelEva1 = kernelTrans(sVs, testDataRandom[i,:], ('rbf',k1))
     testPredict[i] = sign(kernelEva1.T * multiply(labelSV, alphas[svInd]) + b)
 ax.scatter(testDataRandom[:,0],testDataRandom[:,1],c=testPredict,alpha=0.6) 
+# 
+ax.contourf(testDataRandomX,testDataRandomY,testPredict.reshape(testDataRandomX.shape),alpha=0.08,cmap=plt.cm.Spectral) 
+ax.contour(testDataRandomX,testDataRandomY,testPredict.reshape(testDataRandomX.shape), levels=[.5], cmap="Greys", vmin=0, vmax=.6)
+ax.set_xlim(-1,1.2)
+ax.set_ylim(-1,1.2)
